@@ -30,10 +30,15 @@ RUN npm install --omit=dev --ignore-scripts
 # Copy source code
 COPY --chown=pptruser:pptruser . .
 
-# Install client dependencies and build
+# Install client dependencies (INCLUDING devDependencies for build)
 WORKDIR /app/client
-RUN npm install
+RUN npm install --include=dev
+
+# Build the client
 RUN npm run build
+
+# Remove devDependencies after build to reduce image size
+RUN npm prune --omit=dev
 
 # Go back to app root
 WORKDIR /app
