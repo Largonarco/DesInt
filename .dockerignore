@@ -1,0 +1,34 @@
+# Dependencies (will be installed fresh in container)
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Build outputs (will be built in container)
+client/dist/
+
+# Development files
+.git/
+.gitignore
+*.md
+.env*
+!.env.example
+
+# Database
+data/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test files
+coverage/
+*.test.js
+*.spec.js

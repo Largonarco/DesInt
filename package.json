@@ -1,0 +1,29 @@
+{
+  "name": "design-intelligence-engine",
+  "version": "1.0.0",
+  "description": "Shazam for Design Systems - Extract visual identity from any website",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",
+    "server:dev": "node server/index.js",
+    "client:dev": "cd client && npm run dev",
+    "build": "cd client && npm install && npm run build",
+    "start": "NODE_ENV=production node server/index.js",
+    "postinstall": "npm run build"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "color": "^4.2.3",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "openai": "^4.28.0",
+    "puppeteer": "^22.0.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
