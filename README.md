@@ -4,8 +4,6 @@
 
 A powerful tool that analyzes websites and extracts their design DNA: colors, typography, logos, and brand voice.
 
-![Design Intelligence Engine](https://img.shields.io/badge/Node.js-18+-green) ![License](https://img.shields.io/badge/license-MIT-blue)
-
 ## Features
 
 - **Smart Color Detection**: Identifies primary, secondary, and background colors by analyzing buttons, links, SVGs, and visual hierarchy
