@@ -1,33 +1,80 @@
+import fs from "fs";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { fileURLToPath } from "url";
-import Database from "better-sqlite3";
+import initSqlJs from "sql.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+/**
+ * SQLite database using sql.js (pure JavaScript, no native bindings)
+ * Works in any environment including Docker containers
+ */
 export class ScanDatabase {
 	constructor() {
-		const dbPath = path.join(__dirname, "..", "data", "scans.db");
-		this.db = new Database(dbPath);
-		this.init();
+		this.dbPath = path.join(__dirname, "..", "data", "scans.db");
+		this.db = null;
+		this.ready = this.init();
 	}
 
-	init() {
+	async init() {
+		const SQL = await initSqlJs();
+		
+		// Load existing database or create new one
+		try {
+			if (fs.existsSync(this.dbPath)) {
+				const fileBuffer = fs.readFileSync(this.dbPath);
+				this.db = new SQL.Database(fileBuffer);
+			} else {
+				this.db = new SQL.Database();
+			}
+		} catch (err) {
+			console.log("Creating new database...");
+			this.db = new SQL.Database();
+		}
+
 		// Create tables if they don't exist
-		this.db.exec(`
-      CREATE TABLE IF NOT EXISTS scans (
-        id TEXT PRIMARY KEY,
-        url TEXT NOT NULL,
-        domain TEXT NOT NULL,
-        scanned_at TEXT NOT NULL,
-        data TEXT NOT NULL,
-        screenshot TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
-      );
-      
-      CREATE INDEX IF NOT EXISTS idx_scans_domain ON scans(domain);
-      CREATE INDEX IF NOT EXISTS idx_scans_scanned_at ON scans(scanned_at DESC);
-    `);
+		this.db.run(`
+			CREATE TABLE IF NOT EXISTS scans (
+				id TEXT PRIMARY KEY,
+				url TEXT NOT NULL,
+				domain TEXT NOT NULL,
+				scanned_at TEXT NOT NULL,
+				data TEXT NOT NULL,
+				screenshot TEXT,
+				created_at TEXT DEFAULT CURRENT_TIMESTAMP
+			)
+		`);
+		
+		this.db.run(`CREATE INDEX IF NOT EXISTS idx_scans_domain ON scans(domain)`);
+		this.db.run(`CREATE INDEX IF NOT EXISTS idx_scans_scanned_at ON scans(scanned_at DESC)`);
+		
+		// Save initial state
+		this.persist();
+		
+		return this;
+	}
+
+	/**
+	 * Persist database to disk
+	 */
+	persist() {
+		try {
+			const data = this.db.export();
+			const buffer = Buffer.from(data);
+			fs.writeFileSync(this.dbPath, buffer);
+		} catch (err) {
+			console.error("Failed to persist database:", err.message);
+		}
+	}
+
+	/**
+	 * Ensure database is ready
+	 */
+	async ensureReady() {
+		if (!this.db) {
+			await this.ready;
+		}
 	}
 
 	/**
@@ -42,20 +89,12 @@ export class ScanDatabase {
 		const dataWithoutScreenshot = { ...scanResult };
 		delete dataWithoutScreenshot.screenshot;
 
-		const stmt = this.db.prepare(`
-      INSERT INTO scans (id, url, domain, scanned_at, data, screenshot)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-
-		stmt.run(
-			id,
-			scanResult.url,
-			domain,
-			scanResult.scrapedAt,
-			JSON.stringify(dataWithoutScreenshot),
-			screenshot,
+		this.db.run(
+			`INSERT INTO scans (id, url, domain, scanned_at, data, screenshot) VALUES (?, ?, ?, ?, ?, ?)`,
+			[id, scanResult.url, domain, scanResult.scrapedAt, JSON.stringify(dataWithoutScreenshot), screenshot]
 		);
 
+		this.persist();
 		return id;
 	}
 
@@ -64,19 +103,26 @@ export class ScanDatabase {
 	 */
 	getAll(limit = 50) {
 		const stmt = this.db.prepare(`
-      SELECT id, url, domain, scanned_at, data
-      FROM scans
-      ORDER BY scanned_at DESC
-      LIMIT ?
-    `);
+			SELECT id, url, domain, scanned_at, data
+			FROM scans
+			ORDER BY scanned_at DESC
+			LIMIT ?
+		`);
+		stmt.bind([limit]);
 
-		return stmt.all(limit).map((row) => ({
-			id: row.id,
-			url: row.url,
-			domain: row.domain,
-			scannedAt: row.scanned_at,
-			data: JSON.parse(row.data),
-		}));
+		const results = [];
+		while (stmt.step()) {
+			const row = stmt.getAsObject();
+			results.push({
+				id: row.id,
+				url: row.url,
+				domain: row.domain,
+				scannedAt: row.scanned_at,
+				data: JSON.parse(row.data),
+			});
+		}
+		stmt.free();
+		return results;
 	}
 
 	/**
@@ -84,30 +130,34 @@ export class ScanDatabase {
 	 */
 	getById(id) {
 		const stmt = this.db.prepare(`
-      SELECT id, url, domain, scanned_at, data, screenshot
-      FROM scans
-      WHERE id = ?
-    `);
+			SELECT id, url, domain, scanned_at, data, screenshot
+			FROM scans
+			WHERE id = ?
+		`);
+		stmt.bind([id]);
 
-		const row = stmt.get(id);
-		if (!row) return null;
-
-		return {
-			id: row.id,
-			url: row.url,
-			domain: row.domain,
-			scannedAt: row.scanned_at,
-			data: JSON.parse(row.data),
-			screenshot: row.screenshot,
-		};
+		if (stmt.step()) {
+			const row = stmt.getAsObject();
+			stmt.free();
+			return {
+				id: row.id,
+				url: row.url,
+				domain: row.domain,
+				scannedAt: row.scanned_at,
+				data: JSON.parse(row.data),
+				screenshot: row.screenshot,
+			};
+		}
+		stmt.free();
+		return null;
 	}
 
 	/**
 	 * Delete a scan
 	 */
 	delete(id) {
-		const stmt = this.db.prepare("DELETE FROM scans WHERE id = ?");
-		return stmt.run(id);
+		this.db.run("DELETE FROM scans WHERE id = ?", [id]);
+		this.persist();
 	}
 
 	/**
@@ -115,19 +165,26 @@ export class ScanDatabase {
 	 */
 	getByDomain(domain) {
 		const stmt = this.db.prepare(`
-      SELECT id, url, domain, scanned_at, data
-      FROM scans
-      WHERE domain = ?
-      ORDER BY scanned_at DESC
-    `);
+			SELECT id, url, domain, scanned_at, data
+			FROM scans
+			WHERE domain = ?
+			ORDER BY scanned_at DESC
+		`);
+		stmt.bind([domain]);
 
-		return stmt.all(domain).map((row) => ({
-			id: row.id,
-			url: row.url,
-			domain: row.domain,
-			scannedAt: row.scanned_at,
-			data: JSON.parse(row.data),
-		}));
+		const results = [];
+		while (stmt.step()) {
+			const row = stmt.getAsObject();
+			results.push({
+				id: row.id,
+				url: row.url,
+				domain: row.domain,
+				scannedAt: row.scanned_at,
+				data: JSON.parse(row.data),
+			});
+		}
+		stmt.free();
+		return results;
 	}
 }
 

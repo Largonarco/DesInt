@@ -57,6 +57,9 @@ app.post("/api/scan", async (req, res) => {
 	const startTime = Date.now();
 
 	try {
+		// Ensure database is ready
+		await db.ensureReady();
+
 		// Step 1: Scrape the website
 		console.log("  → Extracting design elements...");
 		const scrapeResult = await scraper.scrape(validUrl.href);
@@ -95,8 +98,9 @@ app.post("/api/scan", async (req, res) => {
  * GET /api/scans
  * Get scan history
  */
-app.get("/api/scans", (req, res) => {
+app.get("/api/scans", async (req, res) => {
 	try {
+		await db.ensureReady();
 		const scans = db.getAll(50);
 		res.json(scans);
 	} catch (error) {
@@ -108,8 +112,9 @@ app.get("/api/scans", (req, res) => {
  * GET /api/scans/:id
  * Get a specific scan by ID
  */
-app.get("/api/scans/:id", (req, res) => {
+app.get("/api/scans/:id", async (req, res) => {
 	try {
+		await db.ensureReady();
 		const scan = db.getById(req.params.id);
 		if (!scan) {
 			return res.status(404).json({ error: "Scan not found" });
@@ -124,8 +129,9 @@ app.get("/api/scans/:id", (req, res) => {
  * DELETE /api/scans/:id
  * Delete a scan
  */
-app.delete("/api/scans/:id", (req, res) => {
+app.delete("/api/scans/:id", async (req, res) => {
 	try {
+		await db.ensureReady();
 		db.delete(req.params.id);
 		res.json({ success: true });
 	} catch (error) {
@@ -169,8 +175,14 @@ process.on("SIGTERM", async () => {
 	process.exit(0);
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-	console.log(`
+// Start server after database is ready
+async function startServer() {
+	try {
+		await db.ready;
+		console.log("Database initialized successfully");
+		
+		app.listen(PORT, "0.0.0.0", () => {
+			console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
 ║   🎨 Design Intelligence Engine                           ║
@@ -180,7 +192,14 @@ app.listen(PORT, "0.0.0.0", () => {
 ║   OpenAI API: ${process.env.OPENAI_API_KEY ? '✅ Connected' : '⚠️  Not configured'}                        ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
-  `);
-});
+			`);
+		});
+	} catch (error) {
+		console.error("Failed to start server:", error);
+		process.exit(1);
+	}
+}
+
+startServer();
 
 export default app;
