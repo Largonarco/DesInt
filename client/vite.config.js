@@ -6,7 +6,6 @@ export default defineConfig({
 	build: {
 		outDir: "dist",
 		sourcemap: false,
-		// Use esbuild for minification (default, no extra dependency needed)
 		minify: "esbuild",
 	},
 	server: {

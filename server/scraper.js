@@ -1,24 +1,12 @@
 import puppeteer from "puppeteer";
 
-/**
- * Design Intelligence Engine - Core Scraper
- * 
- * WHY PUPPETEER?
- * - We need COMPUTED styles, not just CSS files. A site might use CSS variables,
- *   Tailwind classes, or inline styles. Puppeteer renders the page like a real
- *   browser and gives us the actual computed values.
- * - We can execute JavaScript to find interactive elements (buttons, links)
- *   and extract their actual rendered colors.
- * - Better logo detection - we can check actual rendered sizes and visibility.
- */
-
 export class DesignScraper {
 	constructor() {
 		this.browser = null;
 	}
 
 	async init() {
-		// Configure Puppeteer for different environments
+		// configure puppeteer
 		const launchOptions = {
 			headless: "new",
 			args: [
@@ -33,7 +21,7 @@ export class DesignScraper {
 			]
 		};
 
-		// Use system Chrome in Docker/Railway environment
+		// use system chrome
 		if (process.env.PUPPETEER_EXECUTABLE_PATH) {
 			launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
 		}
@@ -393,12 +381,12 @@ export class DesignScraper {
 			}
 		});
 
-		// Score SVG colors - VERY important for brand colors (logos!)
-		// Colors in header SVGs get highest weight
+		// score SVG colors - very important for brand colors (logos!)
+		// colors in header SVGs get highest weight
 		if (colorData.svgColors) {
 			colorData.svgColors.forEach((svg) => {
 				const vibrancy = getColorVibrancy(svg.color);
-				// Header SVGs (likely logos) get massive bonus
+				// header SVGs (likely logos) get massive bonus
 				const headerBonus = svg.inHeader ? 150 : 50;
 				const vibrancyBonus = vibrancy * 80;
 				addScore(svg.color, headerBonus + vibrancyBonus, "svg");
@@ -413,18 +401,18 @@ export class DesignScraper {
 			});
 		}
 
-		// filters and sorts colors
+		// filter and sort colors
 		const isValidBrandColor = (hex) => {
 			if (!hex) return false;
 			const r = parseInt(hex.slice(1, 3), 16);
 			const g = parseInt(hex.slice(3, 5), 16);
 			const b = parseInt(hex.slice(5, 7), 16);
 
-			// Check if it's not pure white/black
+			// check if it's not pure white/black
 			const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 			if (luminance > 0.95 || luminance < 0.05) return false;
 
-			// Check saturation
+			// check saturation
 			const max = Math.max(r, g, b);
 			const min = Math.min(r, g, b);
 			const saturation = max === 0 ? 0 : (max - min) / max;
@@ -432,33 +420,33 @@ export class DesignScraper {
 			return saturation > 0.1 || (luminance > 0.1 && luminance < 0.9);
 		};
 
-		// Get sorted colors by score
+		// get sorted colors by score
 		const sortedColors = Array.from(colorScores.entries())
 			.filter(([color]) => isValidBrandColor(color))
 			.sort((a, b) => b[1].total - a[1].total);
 
-		// Find primary - prefer vibrant button colors over neutral ones
+		// find primary - prefer vibrant button colors over neutral ones
 		// First, try to find a vibrant button color
 		let primaryColor = sortedColors.find(
 			([color, data]) =>
 				data.categories.button && data.categories.button > 50 && !isNeutralOrDark(color),
 		);
 
-		// If no vibrant button color, fall back to any high-scoring vibrant color
+		// if no vibrant button color, fall back to any high-scoring vibrant color
 		if (!primaryColor) {
 			primaryColor = sortedColors.find(
 				([color, data]) => !isNeutralOrDark(color) && data.total > 50,
 			);
 		}
 
-		// Last resort: highest scoring button color
+		// last resort: highest scoring button color
 		if (!primaryColor) {
 			primaryColor = sortedColors.find(
 				([color, data]) => data.categories.button && data.categories.button > 50,
 			);
 		}
 
-		// Find secondary (highest scoring non-primary vibrant color)
+		// find secondary (highest scoring non-primary vibrant color)
 		const secondaryColor =
 			sortedColors.find(
 				([color, data]) =>
@@ -471,14 +459,14 @@ export class DesignScraper {
 					color !== primaryColor?.[0] && (data.categories.link || data.categories.button),
 			);
 
-		// Find background colors
+		// find background colors
 		const bgColors = colorData.backgrounds
 			.filter((bg) => bg.area > 50000)
 			.sort((a, b) => b.area - a.area)
 			.slice(0, 3)
 			.map((bg) => bg.color);
 
-		// Find text colors
+		// find text colors
 		const textCounts = {};
 		colorData.text.forEach((color) => {
 			textCounts[color] = (textCounts[color] || 0) + 1;
@@ -488,7 +476,7 @@ export class DesignScraper {
 			.slice(0, 2)
 			.map(([color]) => color);
 
-		// Find accent (third most prominent vibrant color)
+		// find accent (third most prominent vibrant color)
 		const accentColor = sortedColors.find(
 			([color]) =>
 				color !== primaryColor?.[0] && color !== secondaryColor?.[0] && !isNeutralOrDark(color),
@@ -517,7 +505,7 @@ export class DesignScraper {
 				body: new Map(),
 			};
 
-			// Extract heading fonts
+			// extract heading fonts
 			const headings = document.querySelectorAll("h1, h2, h3, h4, h5, h6");
 			headings.forEach((h) => {
 				const style = window.getComputedStyle(h);
@@ -535,13 +523,13 @@ export class DesignScraper {
 				entry.weights.push(fontWeight);
 			});
 
-			// Extract body fonts
+			// extract body fonts
 			const bodyElements = document.querySelectorAll("p, span, li, a, div");
 			bodyElements.forEach((el) => {
 				const style = window.getComputedStyle(el);
 				const fontSize = parseFloat(style.fontSize);
 
-				// Only consider text-sized elements (12-20px typically)
+				// only consider text-sized elements (12-20px typically)
 				if (fontSize >= 12 && fontSize <= 24) {
 					const fontFamily = style.fontFamily.split(",")[0].replace(/['"]/g, "").trim();
 					const fontWeight = style.fontWeight;

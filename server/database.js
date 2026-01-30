@@ -1,26 +1,23 @@
 import fs from "fs";
 import path from "path";
+import initSqlJs from "sql.js";
 import { v4 as uuidv4 } from "uuid";
 import { fileURLToPath } from "url";
-import initSqlJs from "sql.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-/**
- * SQLite database using sql.js (pure JavaScript, no native bindings)
- * Works in any environment including Docker containers
- */
 export class ScanDatabase {
 	constructor() {
-		this.dbPath = path.join(__dirname, "..", "data", "scans.db");
 		this.db = null;
+		this.dbPath = path.join(__dirname, "..", "data", "scans.db");
+
 		this.ready = this.init();
 	}
 
 	async init() {
 		const SQL = await initSqlJs();
 		
-		// Load existing database or create new one
+		// load existing database or create new one
 		try {
 			if (fs.existsSync(this.dbPath)) {
 				const fileBuffer = fs.readFileSync(this.dbPath);
@@ -55,9 +52,7 @@ export class ScanDatabase {
 		return this;
 	}
 
-	/**
-	 * Persist database to disk
-	 */
+
 	persist() {
 		try {
 			const data = this.db.export();
@@ -67,24 +62,18 @@ export class ScanDatabase {
 			console.error("Failed to persist database:", err.message);
 		}
 	}
-
-	/**
-	 * Ensure database is ready
-	 */
+	
 	async ensureReady() {
 		if (!this.db) {
 			await this.ready;
 		}
 	}
-
-	/**
-	 * Save a scan result
-	 */
+	
 	save(scanResult) {
 		const id = uuidv4();
 		const domain = new URL(scanResult.url).hostname;
 
-		// Store screenshot separately to keep main data lean
+		// store screenshot separately to keep main data lean
 		const screenshot = scanResult.screenshot;
 		const dataWithoutScreenshot = { ...scanResult };
 		delete dataWithoutScreenshot.screenshot;

@@ -9,7 +9,6 @@ import { ScanDatabase } from "./database.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Ensure data directory exists
 const dataDir = path.join(__dirname, "..", "data");
 if (!fs.existsSync(dataDir)) {
 	fs.mkdirSync(dataDir, { recursive: true });
@@ -18,12 +17,10 @@ if (!fs.existsSync(dataDir)) {
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Initialize services
+const db = new ScanDatabase();
 const scraper = new DesignScraper();
 const analyzer = new ToneAnalyzer(process.env.OPENAI_API_KEY);
-const db = new ScanDatabase();
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
@@ -45,7 +42,7 @@ app.post("/api/scan", async (req, res) => {
 		return res.status(400).json({ error: "URL is required" });
 	}
 
-	// Validate URL
+	// validate URL
 	let validUrl;
 	try {
 		validUrl = new URL(url.startsWith("http") ? url : `https://${url}`);
@@ -57,36 +54,31 @@ app.post("/api/scan", async (req, res) => {
 	const startTime = Date.now();
 
 	try {
-		// Ensure database is ready
+		// ensure database is ready
 		await db.ensureReady();
 
-		// Step 1: Scrape the website
-		console.log("  → Extracting design elements...");
+		// scrape website
+		console.log("Extracting design elements...");
 		const scrapeResult = await scraper.scrape(validUrl.href);
 
-		// Step 2: Analyze tone with LLM
-		console.log("  → Analyzing brand voice...");
+		// analyze tone 
+		console.log("Analyzing brand voice...");
 		const toneAnalysis = await analyzer.analyze(scrapeResult.heroContent, scrapeResult.colors);
 
-		// Combine results
 		const result = {
 			...scrapeResult,
 			tone: toneAnalysis,
 		};
 
-		// Step 3: Save to database
-		console.log("  → Saving to history...");
 		const scanId = db.save(result);
 
 		const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-		console.log(`✅ Scan complete in ${duration}s (ID: ${scanId})`);
 
 		res.json({
 			id: scanId,
 			...result,
 		});
 	} catch (error) {
-		console.error("❌ Scan failed:", error.message);
 		res.status(500).json({
 			error: "Failed to scan website",
 			details: error.message,
@@ -101,7 +93,9 @@ app.post("/api/scan", async (req, res) => {
 app.get("/api/scans", async (req, res) => {
 	try {
 		await db.ensureReady();
+
 		const scans = db.getAll(50);
+
 		res.json(scans);
 	} catch (error) {
 		res.status(500).json({ error: "Failed to fetch scan history" });
@@ -115,10 +109,12 @@ app.get("/api/scans", async (req, res) => {
 app.get("/api/scans/:id", async (req, res) => {
 	try {
 		await db.ensureReady();
+
 		const scan = db.getById(req.params.id);
 		if (!scan) {
 			return res.status(404).json({ error: "Scan not found" });
 		}
+
 		res.json(scan);
 	} catch (error) {
 		res.status(500).json({ error: "Failed to fetch scan" });
@@ -132,7 +128,9 @@ app.get("/api/scans/:id", async (req, res) => {
 app.delete("/api/scans/:id", async (req, res) => {
 	try {
 		await db.ensureReady();
+
 		db.delete(req.params.id);
+
 		res.json({ success: true });
 	} catch (error) {
 		res.status(500).json({ error: "Failed to delete scan" });
@@ -162,7 +160,6 @@ if (process.env.NODE_ENV === "production") {
 	});
 }
 
-// Graceful shutdown
 process.on("SIGINT", async () => {
 	console.log("\n🛑 Shutting down...");
 	await scraper.close();
@@ -182,17 +179,7 @@ async function startServer() {
 		console.log("Database initialized successfully");
 		
 		app.listen(PORT, "0.0.0.0", () => {
-			console.log(`
-╔═══════════════════════════════════════════════════════════╗
-║                                                           ║
-║   🎨 Design Intelligence Engine                           ║
-║   ─────────────────────────────────────────────────────   ║
-║   Server running on port ${PORT}                           ║
-║   Environment: ${process.env.NODE_ENV || 'development'}                            ║
-║   OpenAI API: ${process.env.OPENAI_API_KEY ? '✅ Connected' : '⚠️  Not configured'}                        ║
-║                                                           ║
-╚═══════════════════════════════════════════════════════════╝
-			`);
+			console.log(`Server running on port ${PORT}`);
 		});
 	} catch (error) {
 		console.error("Failed to start server:", error);

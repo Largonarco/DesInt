@@ -4,17 +4,17 @@ export default {
 	theme: {
 		extend: {
 			fontFamily: {
-				sans: ["Inter", "system-ui", "sans-serif"],
 				mono: ["JetBrains Mono", "monospace"],
+				sans: ["Inter", "system-ui", "sans-serif"],
 			},
 			animation: {
-				"pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
 				gradient: "gradient 8s ease infinite",
+				"pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
 			},
 			keyframes: {
 				gradient: {
-					"0%, 100%": { backgroundPosition: "0% 50%" },
 					"50%": { backgroundPosition: "100% 50%" },
+					"0%, 100%": { backgroundPosition: "0% 50%" },
 				},
 			},
 		},
